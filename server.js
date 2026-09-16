@@ -1,6 +1,10 @@
 /**
  * Dots and Boxes - Multiplayer Server
- * Compatible with the name + symbol client
+ * Express + Socket.io
+ *
+ * Compatible with the client that sends:
+ *   createRoom({ name })
+ *   joinRoom({ code, name })
  *
  * Render settings:
  *   Build Command : npm install
@@ -13,26 +17,26 @@ const { Server } = require('socket.io');
 const cors = require('cors');
 
 const app = express();
+
 app.use(cors({ origin: '*' }));
 app.use(express.json());
-
-// Health check
-app.get('/', (req, res) => {
-  res.send('Dots & Boxes server is running ✅');
-});
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok', rooms: rooms.size });
-});
+app.use(express.static('public'));
 
 const server = http.createServer(app);
+
 const io = new Server(server, {
-  cors: { origin: '*', methods: ['GET', 'POST'] },
+  cors: {
+    origin: '*',
+    methods: ['GET', 'POST']
+  },
   pingTimeout: 60000,
   pingInterval: 25000
 });
 
 const DOTS = 8;
 const BOXES = DOTS - 1;
+
+// In-memory rooms
 const rooms = new Map();
 
 function getSymbol(name) {
@@ -58,6 +62,7 @@ function createEmptyState() {
 
 function checkBox(state, r, c, playerKey) {
   const { hLines, vLines, boxes } = state;
+
   const top = hLines[r][c];
   const bottom = hLines[r + 1][c];
   const left = vLines[r][c];
@@ -87,6 +92,7 @@ function applyMove(state, type, r, c, playerKey) {
   }
 
   let completed = false;
+
   if (type === 'h') {
     if (r > 0) completed = checkBox(state, r - 1, c, playerKey) || completed;
     if (r < BOXES) completed = checkBox(state, r, c, playerKey) || completed;
@@ -95,6 +101,7 @@ function applyMove(state, type, r, c, playerKey) {
     if (c < BOXES) completed = checkBox(state, r, c, playerKey) || completed;
   }
 
+  // Completing a box gives the same player another turn
   if (!completed) {
     state.currentTurn = state.currentTurn === 'A' ? 'B' : 'A';
   }
@@ -102,6 +109,7 @@ function applyMove(state, type, r, c, playerKey) {
   if (state.scores.A + state.scores.B === BOXES * BOXES) {
     state.gameOver = true;
   }
+
   return true;
 }
 
@@ -130,7 +138,9 @@ function getPublicState(state) {
 io.on('connection', (socket) => {
   console.log('Player connected:', socket.id);
 
-  // ========== CREATE ROOM ==========
+  // =========================
+  // CREATE ROOM
+  // =========================
   socket.on('createRoom', (data = {}) => {
     const name = (data.name || 'Player').trim().slice(0, 20);
     const symbol = getSymbol(name);
@@ -144,9 +154,10 @@ io.on('connection', (socket) => {
     state.players.A = socket.id;
     state.playerNames.A = name;
     state.playerSymbols.A = symbol;
-    rooms.set(code, state);
 
+    rooms.set(code, state);
     socket.join(code);
+
     socket.emit('roomCreated', {
       roomId: code,
       player: 'A',
@@ -157,17 +168,19 @@ io.on('connection', (socket) => {
     console.log(`Room ${code} created by ${name} (${symbol})`);
   });
 
-  // ========== JOIN ROOM ==========
-  // Accepts both:  string  OR  { code, name }
+  // =========================
+  // JOIN ROOM
+  // Accepts both string and object for safety
+  // =========================
   socket.on('joinRoom', (data) => {
     let code, name;
 
     if (typeof data === 'string') {
-      // old client
+      // old format
       code = data;
       name = 'Player';
     } else {
-      // new client
+      // new format from client
       code = data?.code;
       name = data?.name || 'Player';
     }
@@ -177,10 +190,12 @@ io.on('connection', (socket) => {
     const symbol = getSymbol(name);
 
     const state = rooms.get(code);
+
     if (!state) {
       socket.emit('error', 'Room not found');
       return;
     }
+
     if (state.players.B) {
       socket.emit('error', 'Room is full');
       return;
@@ -191,6 +206,7 @@ io.on('connection', (socket) => {
     state.playerSymbols.B = symbol;
 
     socket.join(code);
+
     socket.emit('roomJoined', {
       roomId: code,
       player: 'B',
@@ -200,12 +216,16 @@ io.on('connection', (socket) => {
 
     // Start game for both players
     io.to(code).emit('startGame', getPublicState(state));
+
     console.log(`${name} (${symbol}) joined room ${code}`);
   });
 
-  // ========== MOVE ==========
+  // =========================
+  // MOVE
+  // =========================
   socket.on('move', ({ roomId, type, r, c }) => {
     const state = rooms.get(roomId);
+
     if (!state) {
       socket.emit('error', 'Room not found');
       return;
@@ -219,12 +239,14 @@ io.on('connection', (socket) => {
       socket.emit('error', 'You are not in this room');
       return;
     }
+
     if (player !== state.currentTurn) {
       socket.emit('error', 'Not your turn');
       return;
     }
 
     const ok = applyMove(state, type, r, c, player);
+
     if (!ok) {
       socket.emit('error', 'Invalid move');
       return;
@@ -233,7 +255,9 @@ io.on('connection', (socket) => {
     io.to(roomId).emit('moveMade', getPublicState(state));
   });
 
-  // ========== NEW GAME ==========
+  // =========================
+  // NEW GAME
+  // =========================
   socket.on('newGame', (roomId) => {
     const state = rooms.get(roomId);
     if (!state) return;
@@ -250,7 +274,9 @@ io.on('connection', (socket) => {
     io.to(roomId).emit('startGame', getPublicState(state));
   });
 
-  // ========== LEAVE ROOM ==========
+  // =========================
+  // LEAVE ROOM
+  // =========================
   socket.on('leaveRoom', (roomId) => {
     const state = rooms.get(roomId);
     if (!state) return;
@@ -266,7 +292,9 @@ io.on('connection', (socket) => {
     }
   });
 
-  // ========== DISCONNECT ==========
+  // =========================
+  // DISCONNECT
+  // =========================
   socket.on('disconnect', () => {
     for (const [code, state] of rooms) {
       if (state.players.A === socket.id || state.players.B === socket.id) {
@@ -284,7 +312,22 @@ io.on('connection', (socket) => {
   });
 });
 
+// =========================
+// HEALTH CHECK
+// =========================
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    game: 'Dots & Boxes',
+    rooms: rooms.size
+  });
+});
+
+// =========================
+// START SERVER
+// =========================
 const PORT = process.env.PORT || 3001;
+
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Dots & Boxes server running on port ${PORT}`);
 });
