@@ -203,7 +203,7 @@
     // Change this to your deployed server URL when hosting
     const SERVER_URL = window.location.hostname === 'localhost' 
       ? 'http://localhost:3001' 
-      : 'https://YOUR-RAILWAY-APP.up.railway.app'; // <-- replace after deploy
+      : window.location.origin; // <-- replace after deploy
 
     const DOTS = 8; // 8x8 dots → 7x7 boxes
     const BOXES = DOTS - 1;
