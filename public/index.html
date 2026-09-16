@@ -13,6 +13,9 @@
       --line: #64748b;
       --dot: #e2e8f0;
       --text: #f1f5f9;
+      --dot-size: 10px;
+      --line-thick: 6px;
+      --cell: 34px;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -59,15 +62,21 @@
     .turn.a { color: var(--accent-a); }
     .turn.b { color: var(--accent-b); }
     #board {
-      display: grid;
-      justify-content: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
       margin: 0 auto 16px;
       user-select: none;
       touch-action: none;
     }
-    .row { display: flex; align-items: center; }
+    .row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
     .dot {
-      width: 10px; height: 10px;
+      width: var(--dot-size);
+      height: var(--dot-size);
       background: var(--dot);
       border-radius: 50%;
       z-index: 2;
@@ -77,17 +86,20 @@
       background: transparent;
       cursor: pointer;
       transition: background 0.15s;
+      flex-shrink: 0;
     }
-    /* thinner lines */
+    /* Horizontal lines: sit between dots, height = line thickness */
     .hline {
-      height: 6px;
-      width: 34px;
-      margin: 0 0;
+      height: var(--line-thick);
+      width: var(--cell);
     }
+    /* Vertical lines: same column width as a dot so they sit under the dots.
+       Extra side margin centers the thin line under the 10px dot. */
     .vline {
-      width: 6px;
-      height: 34px;
-      margin: 0 0;
+      width: var(--line-thick);
+      height: var(--cell);
+      margin-left: calc((var(--dot-size) - var(--line-thick)) / 2);
+      margin-right: calc((var(--dot-size) - var(--line-thick)) / 2);
     }
     .hline:hover:not(.drawn), .vline:hover:not(.drawn) {
       background: rgba(148,163,184,0.5);
@@ -99,7 +111,8 @@
     .hline.drawn.a, .vline.drawn.a { background: var(--accent-a); }
     .hline.drawn.b, .vline.drawn.b { background: var(--accent-b); }
     .box {
-      width: 34px; height: 34px;
+      width: var(--cell);
+      height: var(--cell);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -107,6 +120,7 @@
       font-size: 0.85rem;
       border-radius: 3px;
       letter-spacing: -0.5px;
+      flex-shrink: 0;
     }
     .box.a { background: rgba(59,130,246,0.35); color: var(--accent-a); }
     .box.b { background: rgba(239,68,68,0.35); color: var(--accent-b); }
@@ -166,10 +180,12 @@
       margin-top: 6px;
     }
     @media (max-width: 480px) {
-      .hline { width: 26px; height: 5px; }
-      .vline { height: 26px; width: 5px; }
-      .box { width: 26px; height: 26px; font-size: 0.75rem; }
-      .dot { width: 8px; height: 8px; }
+      :root {
+        --dot-size: 8px;
+        --line-thick: 5px;
+        --cell: 26px;
+      }
+      .box { font-size: 0.75rem; }
     }
   </style>
 </head>
@@ -177,12 +193,14 @@
   <h1>Dots & Boxes</h1>
   <p class="subtitle">8×8 dots · 2 players · Online multiplayer</p>
 
+
   <!-- LOBBY -->
   <div id="lobby" class="lobby card">
     <div class="name-row">
       <input id="playerName" placeholder="Your Name" maxlength="20" />
     </div>
     <div class="name-preview" id="namePreview">Symbol will appear here</div>
+
 
     <div style="text-align:center; margin: 20px 0 16px;">
       <button class="primary" id="btnCreate">Create Room</button>
@@ -197,6 +215,7 @@
       Your symbol = first + last letter of your name (Saad → Sd)
     </p>
   </div>
+
 
   <!-- GAME -->
   <div id="game" class="game hidden">
@@ -224,19 +243,23 @@
     </div>
   </div>
 
+
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script>
     // ============== CONFIG ==============
     // Local → localhost:3001
     // Production → paste your Render URL below
-    const RENDER_SERVER_URL = 'https://boxgame-0f7l.onrender.com/';  // ← PASTE YOUR RENDER URL HERE
+    const RENDER_SERVER_URL = 'https://boxgame-0f7l.onrender.com';  // ← PASTE YOUR RENDER URL HERE
+
 
     const SERVER_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
       ? 'http://localhost:3001'
       : RENDER_SERVER_URL;
 
+
     const DOTS = 8;
     const BOXES = DOTS - 1;
+
 
     // ============== STATE ==============
     let socket = null;
@@ -253,6 +276,7 @@
     let boxes = [];            // stores the SYMBOL (e.g. "Sd")
     let gameOver = false;
 
+
     // ============== HELPERS ==============
     function getSymbol(name) {
       const clean = (name || '').trim().replace(/\s+/g, '');
@@ -261,12 +285,14 @@
       return (clean[0] + clean[clean.length - 1]).toUpperCase();
     }
 
+
     // Live preview of symbol while typing name
     document.getElementById('playerName').addEventListener('input', (e) => {
       const sym = getSymbol(e.target.value);
       document.getElementById('namePreview').textContent =
         e.target.value.trim() ? `Your symbol: ${sym}` : 'Symbol will appear here';
     });
+
 
     function initBoardData() {
       hLines = Array.from({ length: DOTS }, () => Array(BOXES).fill(null));
@@ -277,10 +303,12 @@
       gameOver = false;
     }
 
+
     // ============== RENDER BOARD ==============
     function renderBoard() {
       const board = document.getElementById('board');
       board.innerHTML = '';
+
 
       for (let r = 0; r < DOTS; r++) {
         const hRow = document.createElement('div');
@@ -305,6 +333,7 @@
         }
         board.appendChild(hRow);
 
+
         if (r < BOXES) {
           const vRow = document.createElement('div');
           vRow.className = 'row';
@@ -320,6 +349,7 @@
               line.addEventListener('click', onLineClick);
             }
             vRow.appendChild(line);
+
 
             if (c < BOXES) {
               const box = document.createElement('div');
@@ -338,11 +368,13 @@
       updateUI();
     }
 
+
     function updateUI() {
       document.getElementById('scoreA').textContent = scores.A;
       document.getElementById('scoreB').textContent = scores.B;
       document.getElementById('nameA').textContent = `${playerNames.A} (${playerSymbols.A})`;
       document.getElementById('nameB').textContent = `${playerNames.B} (${playerSymbols.B})`;
+
 
       const turnEl = document.getElementById('turnInfo');
       if (gameOver) {
@@ -357,6 +389,7 @@
         myPlayer ? ` · You are ${playerNames[myPlayer]} (${playerSymbols[myPlayer]})` : '';
     }
 
+
     function onLineClick(e) {
       if (!myPlayer || currentTurn !== myPlayer || gameOver) return;
       const type = e.target.dataset.type;
@@ -364,6 +397,7 @@
       const c = +e.target.dataset.c;
       socket.emit('move', { roomId, type, r, c });
     }
+
 
     function showWinner() {
       const msg = document.getElementById('winnerMsg');
@@ -377,18 +411,22 @@
       }
     }
 
+
     // ============== SOCKET ==============
     function connectSocket() {
       socket = io(SERVER_URL, { transports: ['websocket', 'polling'] });
+
 
       socket.on('connect', () => {
         document.getElementById('lobbyStatus').textContent = 'Connected to server';
       });
 
+
       socket.on('connect_error', () => {
         document.getElementById('lobbyStatus').textContent =
           'Cannot reach server. (Render free tier may take 30-50s to wake up — wait and try again)';
       });
+
 
       socket.on('roomCreated', ({ roomId: id, player, name, symbol }) => {
         roomId = id;
@@ -400,6 +438,7 @@
         enterGame();
       });
 
+
       socket.on('roomJoined', ({ roomId: id, player, name, symbol }) => {
         roomId = id;
         myPlayer = player;
@@ -410,24 +449,29 @@
         enterGame();
       });
 
+
       socket.on('startGame', (state) => {
         applyFullState(state);
         document.getElementById('gameStatus').textContent = 'Game started!';
       });
 
+
       socket.on('moveMade', (data) => {
         applyFullState(data);
       });
+
 
       socket.on('error', (msg) => {
         document.getElementById('lobbyStatus').textContent = msg;
         document.getElementById('gameStatus').textContent = msg;
       });
 
+
       socket.on('opponentLeft', () => {
         document.getElementById('gameStatus').textContent = 'Opponent left the room';
       });
     }
+
 
     function applyFullState(state) {
       if (state.hLines) hLines = state.hLines;
@@ -443,6 +487,7 @@
       else document.getElementById('winnerMsg').classList.add('hidden');
     }
 
+
     function enterGame() {
       document.getElementById('lobby').classList.add('hidden');
       document.getElementById('game').classList.remove('hidden');
@@ -450,6 +495,7 @@
       initBoardData();
       renderBoard();
     }
+
 
     function getName() {
       const name = document.getElementById('playerName').value.trim();
@@ -460,10 +506,12 @@
       return name;
     }
 
+
     // ============== UI EVENTS ==============
     document.getElementById('btnCreate').onclick = () => {
       const name = getName();
       if (!name) return;
+
 
       if (!socket || !socket.connected) {
         document.getElementById('lobbyStatus').textContent = 'Connecting...';
@@ -474,6 +522,7 @@
       }
     };
 
+
     document.getElementById('btnJoin').onclick = () => {
       const name = getName();
       if (!name) return;
@@ -482,6 +531,7 @@
         document.getElementById('lobbyStatus').textContent = 'Enter a room code';
         return;
       }
+
 
       if (!socket || !socket.connected) {
         document.getElementById('lobbyStatus').textContent = 'Connecting...';
@@ -492,9 +542,11 @@
       }
     };
 
+
     document.getElementById('btnNewGame').onclick = () => {
       if (socket && roomId) socket.emit('newGame', roomId);
     };
+
 
     document.getElementById('btnLeave').onclick = () => {
       if (socket) socket.emit('leaveRoom', roomId);
@@ -504,6 +556,7 @@
       document.getElementById('lobby').classList.remove('hidden');
       document.getElementById('winnerMsg').classList.add('hidden');
     };
+
 
     // Auto connect
     connectSocket();
