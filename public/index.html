@@ -46,7 +46,7 @@
       padding: 12px;
       border-radius: 12px;
       font-weight: 700;
-      font-size: 1.4rem;
+      font-size: 1.15rem;
     }
     .score-a { background: rgba(59,130,246,0.2); border: 2px solid var(--accent-a); color: var(--accent-a); }
     .score-b { background: rgba(239,68,68,0.2); border: 2px solid var(--accent-b); color: var(--accent-b); }
@@ -67,7 +67,7 @@
     }
     .row { display: flex; align-items: center; }
     .dot {
-      width: 12px; height: 12px;
+      width: 10px; height: 10px;
       background: var(--dot);
       border-radius: 50%;
       z-index: 2;
@@ -78,18 +78,19 @@
       cursor: pointer;
       transition: background 0.15s;
     }
+    /* thinner lines */
     .hline {
-      height: 12px;
-      width: 6px;
-      margin: 0 -1px;
+      height: 6px;
+      width: 34px;
+      margin: 0 0;
     }
     .vline {
-      width: 12px;
-      height: 6px;
-      margin: -1px 0;
+      width: 6px;
+      height: 34px;
+      margin: 0 0;
     }
     .hline:hover:not(.drawn), .vline:hover:not(.drawn) {
-      background: rgba(148,163,184,0.4);
+      background: rgba(148,163,184,0.5);
     }
     .hline.drawn, .vline.drawn {
       background: var(--line);
@@ -98,13 +99,14 @@
     .hline.drawn.a, .vline.drawn.a { background: var(--accent-a); }
     .hline.drawn.b, .vline.drawn.b { background: var(--accent-b); }
     .box {
-      width: 6px; height: 6px;
+      width: 34px; height: 34px;
       display: flex;
       align-items: center;
       justify-content: center;
       font-weight: 800;
-      font-size: 1.1rem;
-      border-radius: 4px;
+      font-size: 0.85rem;
+      border-radius: 3px;
+      letter-spacing: -0.5px;
     }
     .box.a { background: rgba(59,130,246,0.35); color: var(--accent-a); }
     .box.b { background: rgba(239,68,68,0.35); color: var(--accent-b); }
@@ -131,10 +133,10 @@
       padding: 10px 14px;
       border-radius: 10px;
       font-size: 1rem;
-      width: 140px;
+      width: 160px;
       text-align: center;
-      letter-spacing: 2px;
     }
+    input#joinCode { letter-spacing: 2px; width: 120px; }
     .room-info { text-align: center; margin: 12px 0; color: #94a3b8; font-size: 0.9rem; }
     .room-code { font-size: 1.6rem; font-weight: 700; letter-spacing: 4px; color: #fbbf24; }
     .status { text-align: center; margin-top: 10px; min-height: 24px; color: #94a3b8; }
@@ -149,11 +151,25 @@
       color: #fbbf24;
     }
     .hidden { display: none !important; }
+    .name-row {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      align-items: center;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+    .name-preview {
+      font-size: 0.85rem;
+      color: #94a3b8;
+      text-align: center;
+      margin-top: 6px;
+    }
     @media (max-width: 480px) {
-      .hline { width: 28px; }
-      .vline { height: 28px; }
-      .box { width: 28px; height: 28px; font-size: 0.9rem; }
-      .dot { width: 10px; height: 10px; }
+      .hline { width: 26px; height: 5px; }
+      .vline { height: 26px; width: 5px; }
+      .box { width: 26px; height: 26px; font-size: 0.75rem; }
+      .dot { width: 8px; height: 8px; }
     }
   </style>
 </head>
@@ -163,7 +179,12 @@
 
   <!-- LOBBY -->
   <div id="lobby" class="lobby card">
-    <div style="text-align:center; margin-bottom:20px;">
+    <div class="name-row">
+      <input id="playerName" placeholder="Your Name" maxlength="20" />
+    </div>
+    <div class="name-preview" id="namePreview">Symbol will appear here</div>
+
+    <div style="text-align:center; margin: 20px 0 16px;">
       <button class="primary" id="btnCreate">Create Room</button>
     </div>
     <div style="display:flex; gap:10px; justify-content:center; align-items:center;">
@@ -173,15 +194,21 @@
     <div class="status" id="lobbyStatus"></div>
     <p style="text-align:center; margin-top:20px; font-size:0.85rem; color:#64748b;">
       Share the room code with a friend.<br>
-      For local play on same device just open two tabs and use the same code.
+      Your symbol = first + last letter of your name (Saad → Sd)
     </p>
   </div>
 
   <!-- GAME -->
   <div id="game" class="game hidden">
     <div class="scores">
-      <div class="score-box score-a">A: <span id="scoreA">0</span></div>
-      <div class="score-box score-b">B: <span id="scoreB">0</span></div>
+      <div class="score-box score-a">
+        <div id="nameA">Player A</div>
+        <div style="font-size:1.5rem; margin-top:4px;"><span id="scoreA">0</span></div>
+      </div>
+      <div class="score-box score-b">
+        <div id="nameB">Player B</div>
+        <div style="font-size:1.5rem; margin-top:4px;"><span id="scoreB">0</span></div>
+      </div>
     </div>
     <div class="turn" id="turnInfo">Player A's turn</div>
     <div id="board"></div>
@@ -200,26 +227,47 @@
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script>
     // ============== CONFIG ==============
-    // Change this to your deployed server URL when hosting
-    const SERVER_URL = window.location.hostname === 'localhost' 
-      ? 'http://localhost:3001' 
-      : window.location.origin; // <-- replace after deploy
+    // Local → localhost:3001
+    // Production → paste your Render URL below
+    const RENDER_SERVER_URL = 'https://boxgame-0f7l.onrender.com/';  // ← PASTE YOUR RENDER URL HERE
 
-    const DOTS = 8; // 8x8 dots → 7x7 boxes
+    const SERVER_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+      ? 'http://localhost:3001'
+      : RENDER_SERVER_URL;
+
+    const DOTS = 8;
     const BOXES = DOTS - 1;
 
     // ============== STATE ==============
     let socket = null;
     let roomId = null;
-    let myPlayer = null; // 'A' or 'B'
+    let myPlayer = null;       // 'A' or 'B'
+    let myName = '';
+    let mySymbol = '';
+    let playerNames = { A: 'Player A', B: 'Player B' };
+    let playerSymbols = { A: 'A', B: 'B' };
     let currentTurn = 'A';
     let scores = { A: 0, B: 0 };
-    let hLines = []; // [row][col] = null | 'A' | 'B'
+    let hLines = [];
     let vLines = [];
-    let boxes = [];  // [row][col] = null | 'A' | 'B'
+    let boxes = [];            // stores the SYMBOL (e.g. "Sd")
     let gameOver = false;
 
-    // ============== INIT BOARD DATA ==============
+    // ============== HELPERS ==============
+    function getSymbol(name) {
+      const clean = (name || '').trim().replace(/\s+/g, '');
+      if (clean.length === 0) return '??';
+      if (clean.length === 1) return clean[0].toUpperCase() + clean[0].toUpperCase();
+      return (clean[0] + clean[clean.length - 1]).toUpperCase();
+    }
+
+    // Live preview of symbol while typing name
+    document.getElementById('playerName').addEventListener('input', (e) => {
+      const sym = getSymbol(e.target.value);
+      document.getElementById('namePreview').textContent =
+        e.target.value.trim() ? `Your symbol: ${sym}` : 'Symbol will appear here';
+    });
+
     function initBoardData() {
       hLines = Array.from({ length: DOTS }, () => Array(BOXES).fill(null));
       vLines = Array.from({ length: BOXES }, () => Array(DOTS).fill(null));
@@ -235,7 +283,6 @@
       board.innerHTML = '';
 
       for (let r = 0; r < DOTS; r++) {
-        // Horizontal line row + dots
         const hRow = document.createElement('div');
         hRow.className = 'row';
         for (let c = 0; c < DOTS; c++) {
@@ -258,7 +305,6 @@
         }
         board.appendChild(hRow);
 
-        // Vertical lines + boxes (only between dots)
         if (r < BOXES) {
           const vRow = document.createElement('div');
           vRow.className = 'row';
@@ -279,7 +325,8 @@
               const box = document.createElement('div');
               box.className = 'box';
               if (boxes[r][c]) {
-                box.classList.add(boxes[r][c].toLowerCase());
+                const owner = boxes[r][c] === playerSymbols.A ? 'a' : 'b';
+                box.classList.add(owner);
                 box.textContent = boxes[r][c];
               }
               vRow.appendChild(box);
@@ -294,73 +341,20 @@
     function updateUI() {
       document.getElementById('scoreA').textContent = scores.A;
       document.getElementById('scoreB').textContent = scores.B;
+      document.getElementById('nameA').textContent = `${playerNames.A} (${playerSymbols.A})`;
+      document.getElementById('nameB').textContent = `${playerNames.B} (${playerSymbols.B})`;
+
       const turnEl = document.getElementById('turnInfo');
-      turnEl.textContent = gameOver ? 'Game Over' : `Player ${currentTurn}'s turn`;
-      turnEl.className = 'turn ' + (gameOver ? '' : currentTurn.toLowerCase());
-      document.getElementById('youAre').textContent = myPlayer ? ` · You are ${myPlayer}` : '';
-    }
-
-    // ============== GAME LOGIC ==============
-    function checkBox(r, c, player) {
-      // Check the four sides of box (r,c)
-      const top = hLines[r][c];
-      const bottom = hLines[r + 1][c];
-      const left = vLines[r][c];
-      const right = vLines[r][c + 1];
-      if (top && bottom && left && right && !boxes[r][c]) {
-        boxes[r][c] = player;
-        scores[player]++;
-        return true;
-      }
-      return false;
-    }
-
-    function applyMove(type, r, c, player) {
-      if (gameOver) return false;
-      if (type === 'h') {
-        if (hLines[r][c]) return false;
-        hLines[r][c] = player;
+      if (gameOver) {
+        turnEl.textContent = 'Game Over';
+        turnEl.className = 'turn';
       } else {
-        if (vLines[r][c]) return false;
-        vLines[r][c] = player;
+        const name = playerNames[currentTurn] || currentTurn;
+        turnEl.textContent = `${name}'s turn`;
+        turnEl.className = 'turn ' + currentTurn.toLowerCase();
       }
-
-      let completed = false;
-      // Check boxes that could be completed by this line
-      if (type === 'h') {
-        // above
-        if (r > 0) completed = checkBox(r - 1, c, player) || completed;
-        // below
-        if (r < BOXES) completed = checkBox(r, c, player) || completed;
-      } else {
-        // left
-        if (c > 0) completed = checkBox(r, c - 1, player) || completed;
-        // right
-        if (c < BOXES) completed = checkBox(r, c, player) || completed;
-      }
-
-      // Extra turn if completed any box, otherwise switch
-      if (!completed) {
-        currentTurn = currentTurn === 'A' ? 'B' : 'A';
-      }
-
-      // Check end
-      const totalBoxes = BOXES * BOXES;
-      if (scores.A + scores.B === totalBoxes) {
-        gameOver = true;
-        showWinner();
-      }
-
-      renderBoard();
-      return true;
-    }
-
-    function showWinner() {
-      const msg = document.getElementById('winnerMsg');
-      msg.classList.remove('hidden');
-      if (scores.A > scores.B) msg.textContent = 'Player A Wins! 🎉';
-      else if (scores.B > scores.A) msg.textContent = 'Player B Wins! 🎉';
-      else msg.textContent = "It's a Draw!";
+      document.getElementById('youAre').textContent =
+        myPlayer ? ` · You are ${playerNames[myPlayer]} (${playerSymbols[myPlayer]})` : '';
     }
 
     function onLineClick(e) {
@@ -368,8 +362,19 @@
       const type = e.target.dataset.type;
       const r = +e.target.dataset.r;
       const c = +e.target.dataset.c;
-      // Send to server
       socket.emit('move', { roomId, type, r, c });
+    }
+
+    function showWinner() {
+      const msg = document.getElementById('winnerMsg');
+      msg.classList.remove('hidden');
+      if (scores.A > scores.B) {
+        msg.textContent = `${playerNames.A} Wins! 🎉`;
+      } else if (scores.B > scores.A) {
+        msg.textContent = `${playerNames.B} Wins! 🎉`;
+      } else {
+        msg.textContent = "It's a Draw!";
+      }
     }
 
     // ============== SOCKET ==============
@@ -381,18 +386,27 @@
       });
 
       socket.on('connect_error', () => {
-        document.getElementById('lobbyStatus').textContent = 'Cannot reach server. Is it running?';
+        document.getElementById('lobbyStatus').textContent =
+          'Cannot reach server. (Render free tier may take 30-50s to wake up — wait and try again)';
       });
 
-      socket.on('roomCreated', ({ roomId: id, player }) => {
+      socket.on('roomCreated', ({ roomId: id, player, name, symbol }) => {
         roomId = id;
         myPlayer = player;
+        myName = name;
+        mySymbol = symbol;
+        playerNames[player] = name;
+        playerSymbols[player] = symbol;
         enterGame();
       });
 
-      socket.on('roomJoined', ({ roomId: id, player }) => {
+      socket.on('roomJoined', ({ roomId: id, player, name, symbol }) => {
         roomId = id;
         myPlayer = player;
+        myName = name;
+        mySymbol = symbol;
+        playerNames[player] = name;
+        playerSymbols[player] = symbol;
         enterGame();
       });
 
@@ -402,7 +416,6 @@
       });
 
       socket.on('moveMade', (data) => {
-        // data: { type, r, c, player, scores, currentTurn, boxes, hLines, vLines, gameOver }
         applyFullState(data);
       });
 
@@ -423,6 +436,8 @@
       if (state.scores) scores = state.scores;
       if (state.currentTurn) currentTurn = state.currentTurn;
       if (typeof state.gameOver === 'boolean') gameOver = state.gameOver;
+      if (state.playerNames) playerNames = state.playerNames;
+      if (state.playerSymbols) playerSymbols = state.playerSymbols;
       renderBoard();
       if (gameOver) showWinner();
       else document.getElementById('winnerMsg').classList.add('hidden');
@@ -436,25 +451,44 @@
       renderBoard();
     }
 
+    function getName() {
+      const name = document.getElementById('playerName').value.trim();
+      if (!name) {
+        document.getElementById('lobbyStatus').textContent = 'Please enter your name first';
+        return null;
+      }
+      return name;
+    }
+
     // ============== UI EVENTS ==============
     document.getElementById('btnCreate').onclick = () => {
+      const name = getName();
+      if (!name) return;
+
       if (!socket || !socket.connected) {
         document.getElementById('lobbyStatus').textContent = 'Connecting...';
         connectSocket();
-        setTimeout(() => socket.emit('createRoom'), 500);
+        setTimeout(() => socket.emit('createRoom', { name }), 600);
       } else {
-        socket.emit('createRoom');
+        socket.emit('createRoom', { name });
       }
     };
 
     document.getElementById('btnJoin').onclick = () => {
+      const name = getName();
+      if (!name) return;
       const code = document.getElementById('joinCode').value.trim().toUpperCase();
-      if (!code) return;
+      if (!code) {
+        document.getElementById('lobbyStatus').textContent = 'Enter a room code';
+        return;
+      }
+
       if (!socket || !socket.connected) {
+        document.getElementById('lobbyStatus').textContent = 'Connecting...';
         connectSocket();
-        setTimeout(() => socket.emit('joinRoom', code), 500);
+        setTimeout(() => socket.emit('joinRoom', { code, name }), 600);
       } else {
-        socket.emit('joinRoom', code);
+        socket.emit('joinRoom', { code, name });
       }
     };
 
@@ -471,7 +505,7 @@
       document.getElementById('winnerMsg').classList.add('hidden');
     };
 
-    // Auto connect on load for convenience
+    // Auto connect
     connectSocket();
   </script>
 </body>
