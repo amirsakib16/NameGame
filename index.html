@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Dots & Boxes - Online</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --accent-a: #3b82f6;
+      --accent-b: #ef4444;
+      --line: #64748b;
+      --dot: #e2e8f0;
+      --text: #f1f5f9;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 16px;
+    }
+    h1 { font-size: 1.8rem; margin-bottom: 8px; letter-spacing: -0.5px; }
+    .subtitle { color: #94a3b8; margin-bottom: 20px; font-size: 0.95rem; }
+    .lobby, .game { width: 100%; max-width: 520px; }
+    .card {
+      background: var(--card);
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+    }
+    .scores {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .score-box {
+      flex: 1;
+      text-align: center;
+      padding: 12px;
+      border-radius: 12px;
+      font-weight: 700;
+      font-size: 1.4rem;
+    }
+    .score-a { background: rgba(59,130,246,0.2); border: 2px solid var(--accent-a); color: var(--accent-a); }
+    .score-b { background: rgba(239,68,68,0.2); border: 2px solid var(--accent-b); color: var(--accent-b); }
+    .turn {
+      text-align: center;
+      margin-bottom: 12px;
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
+    .turn.a { color: var(--accent-a); }
+    .turn.b { color: var(--accent-b); }
+    #board {
+      display: grid;
+      justify-content: center;
+      margin: 0 auto 16px;
+      user-select: none;
+      touch-action: none;
+    }
+    .row { display: flex; align-items: center; }
+    .dot {
+      width: 12px; height: 12px;
+      background: var(--dot);
+      border-radius: 50%;
+      z-index: 2;
+      flex-shrink: 0;
+    }
+    .hline, .vline {
+      background: transparent;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .hline {
+      height: 12px;
+      width: 36px;
+      margin: 0 -1px;
+    }
+    .vline {
+      width: 12px;
+      height: 36px;
+      margin: -1px 0;
+    }
+    .hline:hover:not(.drawn), .vline:hover:not(.drawn) {
+      background: rgba(148,163,184,0.4);
+    }
+    .hline.drawn, .vline.drawn {
+      background: var(--line);
+      cursor: default;
+    }
+    .hline.drawn.a, .vline.drawn.a { background: var(--accent-a); }
+    .hline.drawn.b, .vline.drawn.b { background: var(--accent-b); }
+    .box {
+      width: 36px; height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 1.1rem;
+      border-radius: 4px;
+    }
+    .box.a { background: rgba(59,130,246,0.35); color: var(--accent-a); }
+    .box.b { background: rgba(239,68,68,0.35); color: var(--accent-b); }
+    .controls { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 12px; }
+    button {
+      background: #334155;
+      color: white;
+      border: none;
+      padding: 10px 18px;
+      border-radius: 10px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    button:hover { background: #475569; }
+    button.primary { background: var(--accent-a); }
+    button.primary:hover { background: #2563eb; }
+    button.danger { background: var(--accent-b); }
+    input {
+      background: #0f172a;
+      border: 1px solid #475569;
+      color: white;
+      padding: 10px 14px;
+      border-radius: 10px;
+      font-size: 1rem;
+      width: 140px;
+      text-align: center;
+      letter-spacing: 2px;
+    }
+    .room-info { text-align: center; margin: 12px 0; color: #94a3b8; font-size: 0.9rem; }
+    .room-code { font-size: 1.6rem; font-weight: 700; letter-spacing: 4px; color: #fbbf24; }
+    .status { text-align: center; margin-top: 10px; min-height: 24px; color: #94a3b8; }
+    .winner {
+      text-align: center;
+      font-size: 1.4rem;
+      font-weight: 700;
+      margin: 16px 0;
+      padding: 12px;
+      border-radius: 12px;
+      background: rgba(251,191,36,0.15);
+      color: #fbbf24;
+    }
+    .hidden { display: none !important; }
+    @media (max-width: 480px) {
+      .hline { width: 28px; }
+      .vline { height: 28px; }
+      .box { width: 28px; height: 28px; font-size: 0.9rem; }
+      .dot { width: 10px; height: 10px; }
+    }
+  </style>
+</head>
+<body>
+  <h1>Dots & Boxes</h1>
+  <p class="subtitle">8×8 dots · 2 players · Online multiplayer</p>
+
+  <!-- LOBBY -->
+  <div id="lobby" class="lobby card">
+    <div style="text-align:center; margin-bottom:20px;">
+      <button class="primary" id="btnCreate">Create Room</button>
+    </div>
+    <div style="display:flex; gap:10px; justify-content:center; align-items:center;">
+      <input id="joinCode" placeholder="ROOM CODE" maxlength="6" />
+      <button id="btnJoin">Join</button>
+    </div>
+    <div class="status" id="lobbyStatus"></div>
+    <p style="text-align:center; margin-top:20px; font-size:0.85rem; color:#64748b;">
+      Share the room code with a friend.<br>
+      For local play on same device just open two tabs and use the same code.
+    </p>
+  </div>
+
+  <!-- GAME -->
+  <div id="game" class="game hidden">
+    <div class="scores">
+      <div class="score-box score-a">A: <span id="scoreA">0</span></div>
+      <div class="score-box score-b">B: <span id="scoreB">0</span></div>
+    </div>
+    <div class="turn" id="turnInfo">Player A's turn</div>
+    <div id="board"></div>
+    <div class="room-info">
+      Room: <span class="room-code" id="roomCodeDisplay"></span>
+      <span id="youAre"></span>
+    </div>
+    <div class="status" id="gameStatus"></div>
+    <div id="winnerMsg" class="winner hidden"></div>
+    <div class="controls">
+      <button id="btnNewGame">New Game</button>
+      <button class="danger" id="btnLeave">Leave Room</button>
+    </div>
+  </div>
+
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <script>
+    // ============== CONFIG ==============
+    // Change this to your deployed server URL when hosting
+    const SERVER_URL = window.location.hostname === 'localhost' 
+      ? 'http://localhost:3001' 
+      : 'https://YOUR-RAILWAY-APP.up.railway.app'; // <-- replace after deploy
+
+    const DOTS = 8; // 8x8 dots → 7x7 boxes
+    const BOXES = DOTS - 1;
+
+    // ============== STATE ==============
+    let socket = null;
+    let roomId = null;
+    let myPlayer = null; // 'A' or 'B'
+    let currentTurn = 'A';
+    let scores = { A: 0, B: 0 };
+    let hLines = []; // [row][col] = null | 'A' | 'B'
+    let vLines = [];
+    let boxes = [];  // [row][col] = null | 'A' | 'B'
+    let gameOver = false;
+
+    // ============== INIT BOARD DATA ==============
+    function initBoardData() {
+      hLines = Array.from({ length: DOTS }, () => Array(BOXES).fill(null));
+      vLines = Array.from({ length: BOXES }, () => Array(DOTS).fill(null));
+      boxes = Array.from({ length: BOXES }, () => Array(BOXES).fill(null));
+      scores = { A: 0, B: 0 };
+      currentTurn = 'A';
+      gameOver = false;
+    }
+
+    // ============== RENDER BOARD ==============
+    function renderBoard() {
+      const board = document.getElementById('board');
+      board.innerHTML = '';
+
+      for (let r = 0; r < DOTS; r++) {
+        // Horizontal line row + dots
+        const hRow = document.createElement('div');
+        hRow.className = 'row';
+        for (let c = 0; c < DOTS; c++) {
+          const dot = document.createElement('div');
+          dot.className = 'dot';
+          hRow.appendChild(dot);
+          if (c < BOXES) {
+            const line = document.createElement('div');
+            line.className = 'hline';
+            if (hLines[r][c]) {
+              line.classList.add('drawn', hLines[r][c].toLowerCase());
+            } else {
+              line.dataset.type = 'h';
+              line.dataset.r = r;
+              line.dataset.c = c;
+              line.addEventListener('click', onLineClick);
+            }
+            hRow.appendChild(line);
+          }
+        }
+        board.appendChild(hRow);
+
+        // Vertical lines + boxes (only between dots)
+        if (r < BOXES) {
+          const vRow = document.createElement('div');
+          vRow.className = 'row';
+          for (let c = 0; c < DOTS; c++) {
+            const line = document.createElement('div');
+            line.className = 'vline';
+            if (vLines[r][c]) {
+              line.classList.add('drawn', vLines[r][c].toLowerCase());
+            } else {
+              line.dataset.type = 'v';
+              line.dataset.r = r;
+              line.dataset.c = c;
+              line.addEventListener('click', onLineClick);
+            }
+            vRow.appendChild(line);
+
+            if (c < BOXES) {
+              const box = document.createElement('div');
+              box.className = 'box';
+              if (boxes[r][c]) {
+                box.classList.add(boxes[r][c].toLowerCase());
+                box.textContent = boxes[r][c];
+              }
+              vRow.appendChild(box);
+            }
+          }
+          board.appendChild(vRow);
+        }
+      }
+      updateUI();
+    }
+
+    function updateUI() {
+      document.getElementById('scoreA').textContent = scores.A;
+      document.getElementById('scoreB').textContent = scores.B;
+      const turnEl = document.getElementById('turnInfo');
+      turnEl.textContent = gameOver ? 'Game Over' : `Player ${currentTurn}'s turn`;
+      turnEl.className = 'turn ' + (gameOver ? '' : currentTurn.toLowerCase());
+      document.getElementById('youAre').textContent = myPlayer ? ` · You are ${myPlayer}` : '';
+    }
+
+    // ============== GAME LOGIC ==============
+    function checkBox(r, c, player) {
+      // Check the four sides of box (r,c)
+      const top = hLines[r][c];
+      const bottom = hLines[r + 1][c];
+      const left = vLines[r][c];
+      const right = vLines[r][c + 1];
+      if (top && bottom && left && right && !boxes[r][c]) {
+        boxes[r][c] = player;
+        scores[player]++;
+        return true;
+      }
+      return false;
+    }
+
+    function applyMove(type, r, c, player) {
+      if (gameOver) return false;
+      if (type === 'h') {
+        if (hLines[r][c]) return false;
+        hLines[r][c] = player;
+      } else {
+        if (vLines[r][c]) return false;
+        vLines[r][c] = player;
+      }
+
+      let completed = false;
+      // Check boxes that could be completed by this line
+      if (type === 'h') {
+        // above
+        if (r > 0) completed = checkBox(r - 1, c, player) || completed;
+        // below
+        if (r < BOXES) completed = checkBox(r, c, player) || completed;
+      } else {
+        // left
+        if (c > 0) completed = checkBox(r, c - 1, player) || completed;
+        // right
+        if (c < BOXES) completed = checkBox(r, c, player) || completed;
+      }
+
+      // Extra turn if completed any box, otherwise switch
+      if (!completed) {
+        currentTurn = currentTurn === 'A' ? 'B' : 'A';
+      }
+
+      // Check end
+      const totalBoxes = BOXES * BOXES;
+      if (scores.A + scores.B === totalBoxes) {
+        gameOver = true;
+        showWinner();
+      }
+
+      renderBoard();
+      return true;
+    }
+
+    function showWinner() {
+      const msg = document.getElementById('winnerMsg');
+      msg.classList.remove('hidden');
+      if (scores.A > scores.B) msg.textContent = 'Player A Wins! 🎉';
+      else if (scores.B > scores.A) msg.textContent = 'Player B Wins! 🎉';
+      else msg.textContent = "It's a Draw!";
+    }
+
+    function onLineClick(e) {
+      if (!myPlayer || currentTurn !== myPlayer || gameOver) return;
+      const type = e.target.dataset.type;
+      const r = +e.target.dataset.r;
+      const c = +e.target.dataset.c;
+      // Send to server
+      socket.emit('move', { roomId, type, r, c });
+    }
+
+    // ============== SOCKET ==============
+    function connectSocket() {
+      socket = io(SERVER_URL, { transports: ['websocket', 'polling'] });
+
+      socket.on('connect', () => {
+        document.getElementById('lobbyStatus').textContent = 'Connected to server';
+      });
+
+      socket.on('connect_error', () => {
+        document.getElementById('lobbyStatus').textContent = 'Cannot reach server. Is it running?';
+      });
+
+      socket.on('roomCreated', ({ roomId: id, player }) => {
+        roomId = id;
+        myPlayer = player;
+        enterGame();
+      });
+
+      socket.on('roomJoined', ({ roomId: id, player }) => {
+        roomId = id;
+        myPlayer = player;
+        enterGame();
+      });
+
+      socket.on('startGame', (state) => {
+        applyFullState(state);
+        document.getElementById('gameStatus').textContent = 'Game started!';
+      });
+
+      socket.on('moveMade', (data) => {
+        // data: { type, r, c, player, scores, currentTurn, boxes, hLines, vLines, gameOver }
+        applyFullState(data);
+      });
+
+      socket.on('error', (msg) => {
+        document.getElementById('lobbyStatus').textContent = msg;
+        document.getElementById('gameStatus').textContent = msg;
+      });
+
+      socket.on('opponentLeft', () => {
+        document.getElementById('gameStatus').textContent = 'Opponent left the room';
+      });
+    }
+
+    function applyFullState(state) {
+      if (state.hLines) hLines = state.hLines;
+      if (state.vLines) vLines = state.vLines;
+      if (state.boxes) boxes = state.boxes;
+      if (state.scores) scores = state.scores;
+      if (state.currentTurn) currentTurn = state.currentTurn;
+      if (typeof state.gameOver === 'boolean') gameOver = state.gameOver;
+      renderBoard();
+      if (gameOver) showWinner();
+      else document.getElementById('winnerMsg').classList.add('hidden');
+    }
+
+    function enterGame() {
+      document.getElementById('lobby').classList.add('hidden');
+      document.getElementById('game').classList.remove('hidden');
+      document.getElementById('roomCodeDisplay').textContent = roomId;
+      initBoardData();
+      renderBoard();
+    }
+
+    // ============== UI EVENTS ==============
+    document.getElementById('btnCreate').onclick = () => {
+      if (!socket || !socket.connected) {
+        document.getElementById('lobbyStatus').textContent = 'Connecting...';
+        connectSocket();
+        setTimeout(() => socket.emit('createRoom'), 500);
+      } else {
+        socket.emit('createRoom');
+      }
+    };
+
+    document.getElementById('btnJoin').onclick = () => {
+      const code = document.getElementById('joinCode').value.trim().toUpperCase();
+      if (!code) return;
+      if (!socket || !socket.connected) {
+        connectSocket();
+        setTimeout(() => socket.emit('joinRoom', code), 500);
+      } else {
+        socket.emit('joinRoom', code);
+      }
+    };
+
+    document.getElementById('btnNewGame').onclick = () => {
+      if (socket && roomId) socket.emit('newGame', roomId);
+    };
+
+    document.getElementById('btnLeave').onclick = () => {
+      if (socket) socket.emit('leaveRoom', roomId);
+      roomId = null;
+      myPlayer = null;
+      document.getElementById('game').classList.add('hidden');
+      document.getElementById('lobby').classList.remove('hidden');
+      document.getElementById('winnerMsg').classList.add('hidden');
+    };
+
+    // Auto connect on load for convenience
+    connectSocket();
+  </script>
+</body>
+</html>
