@@ -179,6 +179,63 @@
       text-align: center;
       margin-top: 6px;
     }
+    /* ===== CHAT UI ===== */
+    .chat-area {
+      margin-top: 16px;
+      width: 100%;
+    }
+    .chat-messages {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      min-height: 0;
+      max-height: 140px;
+      overflow: hidden;
+      margin-bottom: 8px;
+      pointer-events: none;
+    }
+    .chat-bubble {
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid #334155;
+      border-radius: 10px;
+      padding: 8px 12px;
+      font-size: 0.9rem;
+      line-height: 1.35;
+      animation: chatIn 0.2s ease-out;
+      word-break: break-word;
+    }
+    .chat-bubble .chat-from {
+      font-weight: 700;
+      margin-right: 6px;
+    }
+    .chat-bubble.from-a .chat-from { color: var(--accent-a); }
+    .chat-bubble.from-b .chat-from { color: var(--accent-b); }
+    .chat-bubble.fading {
+      animation: chatOut 0.4s ease-in forwards;
+    }
+    @keyframes chatIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes chatOut {
+      from { opacity: 1; transform: translateY(0); }
+      to   { opacity: 0; transform: translateY(-6px); }
+    }
+    .chat-input-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .chat-input-row input#chatInput {
+      flex: 1;
+      width: auto;
+      text-align: left;
+      padding: 10px 12px;
+    }
+    .chat-input-row button {
+      padding: 10px 14px;
+      flex-shrink: 0;
+    }
     @media (max-width: 480px) {
       :root {
         --dot-size: 8px;
@@ -194,12 +251,14 @@
   <p class="subtitle">8×8 dots · 2 players · Online multiplayer</p>
 
 
+
   <!-- LOBBY -->
   <div id="lobby" class="lobby card">
     <div class="name-row">
       <input id="playerName" placeholder="Your Name" maxlength="20" />
     </div>
     <div class="name-preview" id="namePreview">Symbol will appear here</div>
+
 
 
     <div style="text-align:center; margin: 20px 0 16px;">
@@ -215,6 +274,7 @@
       Your symbol = first + last letter of your name (Saad → Sd)
     </p>
   </div>
+
 
 
   <!-- GAME -->
@@ -241,7 +301,17 @@
       <button id="btnNewGame">New Game</button>
       <button class="danger" id="btnLeave">Leave Room</button>
     </div>
+
+    <!-- CHAT: bottom of game, does not interrupt play -->
+    <div class="chat-area">
+      <div class="chat-messages" id="chatMessages"></div>
+      <div class="chat-input-row">
+        <input id="chatInput" type="text" placeholder="Type a message..." maxlength="120" autocomplete="off" />
+        <button id="btnSendChat">Send</button>
+      </div>
+    </div>
   </div>
+
 
 
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
@@ -252,13 +322,16 @@
     const RENDER_SERVER_URL = 'https://boxgame-0f7l.onrender.com';  // ← PASTE YOUR RENDER URL HERE
 
 
+
     const SERVER_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
       ? 'http://localhost:3001'
       : RENDER_SERVER_URL;
 
 
+
     const DOTS = 8;
     const BOXES = DOTS - 1;
+
 
 
     // ============== STATE ==============
@@ -277,6 +350,7 @@
     let gameOver = false;
 
 
+
     // ============== HELPERS ==============
     function getSymbol(name) {
       const clean = (name || '').trim().replace(/\s+/g, '');
@@ -286,12 +360,14 @@
     }
 
 
+
     // Live preview of symbol while typing name
     document.getElementById('playerName').addEventListener('input', (e) => {
       const sym = getSymbol(e.target.value);
       document.getElementById('namePreview').textContent =
         e.target.value.trim() ? `Your symbol: ${sym}` : 'Symbol will appear here';
     });
+
 
 
     function initBoardData() {
@@ -304,10 +380,12 @@
     }
 
 
+
     // ============== RENDER BOARD ==============
     function renderBoard() {
       const board = document.getElementById('board');
       board.innerHTML = '';
+
 
 
       for (let r = 0; r < DOTS; r++) {
@@ -334,6 +412,7 @@
         board.appendChild(hRow);
 
 
+
         if (r < BOXES) {
           const vRow = document.createElement('div');
           vRow.className = 'row';
@@ -349,6 +428,7 @@
               line.addEventListener('click', onLineClick);
             }
             vRow.appendChild(line);
+
 
 
             if (c < BOXES) {
@@ -369,11 +449,13 @@
     }
 
 
+
     function updateUI() {
       document.getElementById('scoreA').textContent = scores.A;
       document.getElementById('scoreB').textContent = scores.B;
       document.getElementById('nameA').textContent = `${playerNames.A} (${playerSymbols.A})`;
       document.getElementById('nameB').textContent = `${playerNames.B} (${playerSymbols.B})`;
+
 
 
       const turnEl = document.getElementById('turnInfo');
@@ -390,6 +472,7 @@
     }
 
 
+
     function onLineClick(e) {
       if (!myPlayer || currentTurn !== myPlayer || gameOver) return;
       const type = e.target.dataset.type;
@@ -397,6 +480,7 @@
       const c = +e.target.dataset.c;
       socket.emit('move', { roomId, type, r, c });
     }
+
 
 
     function showWinner() {
@@ -412,9 +496,63 @@
     }
 
 
+
+    // ============== CHAT ==============
+    const CHAT_DURATION_MS = 5000;
+
+    function addChatMessage(fromName, fromPlayer, text) {
+      const container = document.getElementById('chatMessages');
+      const bubble = document.createElement('div');
+      bubble.className = 'chat-bubble from-' + (fromPlayer || '').toLowerCase();
+
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'chat-from';
+      nameSpan.textContent = fromName + ':';
+
+      const textNode = document.createTextNode(' ' + text);
+      bubble.appendChild(nameSpan);
+      bubble.appendChild(textNode);
+
+      container.appendChild(bubble);
+
+      // Keep only a reasonable number of stacked bubbles (oldest removed if too many)
+      while (container.children.length > 6) {
+        container.removeChild(container.firstChild);
+      }
+
+      // Auto-remove after 5 seconds with fade-out
+      setTimeout(() => {
+        bubble.classList.add('fading');
+        setTimeout(() => {
+          if (bubble.parentNode) bubble.parentNode.removeChild(bubble);
+        }, 400);
+      }, CHAT_DURATION_MS);
+    }
+
+    function sendChat() {
+      if (!socket || !roomId || !myPlayer) return;
+      const input = document.getElementById('chatInput');
+      const text = (input.value || '').trim();
+      if (!text) return;
+      socket.emit('chat', { roomId, text });
+      input.value = '';
+      input.focus();
+    }
+
+    document.getElementById('btnSendChat').onclick = sendChat;
+    document.getElementById('chatInput').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        sendChat();
+      }
+    });
+
+
+
     // ============== SOCKET ==============
     function connectSocket() {
       socket = io(SERVER_URL, { transports: ['websocket', 'polling'] });
+
 
 
       socket.on('connect', () => {
@@ -422,10 +560,12 @@
       });
 
 
+
       socket.on('connect_error', () => {
         document.getElementById('lobbyStatus').textContent =
           'Cannot reach server. (Render free tier may take 30-50s to wake up — wait and try again)';
       });
+
 
 
       socket.on('roomCreated', ({ roomId: id, player, name, symbol }) => {
@@ -439,6 +579,7 @@
       });
 
 
+
       socket.on('roomJoined', ({ roomId: id, player, name, symbol }) => {
         roomId = id;
         myPlayer = player;
@@ -450,15 +591,24 @@
       });
 
 
+
       socket.on('startGame', (state) => {
         applyFullState(state);
         document.getElementById('gameStatus').textContent = 'Game started!';
       });
 
 
+
       socket.on('moveMade', (data) => {
         applyFullState(data);
       });
+
+
+
+      socket.on('chatMessage', ({ fromName, fromPlayer, text }) => {
+        addChatMessage(fromName, fromPlayer, text);
+      });
+
 
 
       socket.on('error', (msg) => {
@@ -467,10 +617,12 @@
       });
 
 
+
       socket.on('opponentLeft', () => {
         document.getElementById('gameStatus').textContent = 'Opponent left the room';
       });
     }
+
 
 
     function applyFullState(state) {
@@ -488,13 +640,17 @@
     }
 
 
+
     function enterGame() {
       document.getElementById('lobby').classList.add('hidden');
       document.getElementById('game').classList.remove('hidden');
       document.getElementById('roomCodeDisplay').textContent = roomId;
       initBoardData();
       renderBoard();
+      // clear any leftover chat bubbles when entering a room
+      document.getElementById('chatMessages').innerHTML = '';
     }
+
 
 
     function getName() {
@@ -507,10 +663,12 @@
     }
 
 
+
     // ============== UI EVENTS ==============
     document.getElementById('btnCreate').onclick = () => {
       const name = getName();
       if (!name) return;
+
 
 
       if (!socket || !socket.connected) {
@@ -523,6 +681,7 @@
     };
 
 
+
     document.getElementById('btnJoin').onclick = () => {
       const name = getName();
       if (!name) return;
@@ -531,6 +690,7 @@
         document.getElementById('lobbyStatus').textContent = 'Enter a room code';
         return;
       }
+
 
 
       if (!socket || !socket.connected) {
@@ -543,9 +703,11 @@
     };
 
 
+
     document.getElementById('btnNewGame').onclick = () => {
       if (socket && roomId) socket.emit('newGame', roomId);
     };
+
 
 
     document.getElementById('btnLeave').onclick = () => {
@@ -555,7 +717,9 @@
       document.getElementById('game').classList.add('hidden');
       document.getElementById('lobby').classList.remove('hidden');
       document.getElementById('winnerMsg').classList.add('hidden');
+      document.getElementById('chatMessages').innerHTML = '';
     };
+
 
 
     // Auto connect
