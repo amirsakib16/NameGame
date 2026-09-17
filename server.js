@@ -11,23 +11,23 @@
  * Start Command: npm start
  */
 
-
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
-
+const path = require('path');
 
 const app = express();
 
-
 app.use(cors());
 app.use(express.json());
-app.use(express.static('public'));
 
+// Serve static files from public/ (HTML, stickers, etc.)
+app.use(express.static(path.join(__dirname, 'public')));
+// Also serve the root index.html if present at project root
+app.use(express.static(__dirname));
 
 const server = http.createServer(app);
-
 
 const io = new Server(server, {
   cors: {
@@ -36,14 +36,22 @@ const io = new Server(server, {
   }
 });
 
-
 const DOTS = 8;
 const BOXES = DOTS - 1;
 
+// Allowed sticker IDs (must match client)
+const ALLOWED_STICKERS = new Set([
+  'angryCat',
+  'CritizismCat',
+  'thugCat',
+  'flabbergastedCat',
+  'pardonCat',
+  'xudGayaCat',
+  'belugaCat'
+]);
 
 // In-memory rooms
 const rooms = new Map();
-
 
 function getSymbol(name) {
   const clean = (name || '').trim().replace(/\s+/g, '');
@@ -52,7 +60,6 @@ function getSymbol(name) {
   return (clean[0] + clean[clean.length - 1]).toUpperCase();
 }
 
-
 function createEmptyState() {
   return {
     hLines: Array.from(
@@ -60,40 +67,33 @@ function createEmptyState() {
       () => Array(BOXES).fill(null)
     ),
 
-
     vLines: Array.from(
       { length: BOXES },
       () => Array(DOTS).fill(null)
     ),
-
 
     boxes: Array.from(
       { length: BOXES },
       () => Array(BOXES).fill(null)
     ),
 
-
     scores: {
       A: 0,
       B: 0
     },
 
-
     currentTurn: 'A',
     gameOver: false,
-
 
     players: {
       A: null,
       B: null
     },
 
-
     playerNames: {
       A: 'Player A',
       B: 'Player B'
     },
-
 
     playerSymbols: {
       A: 'A',
@@ -102,16 +102,13 @@ function createEmptyState() {
   };
 }
 
-
 function checkBox(state, r, c, player) {
   const { hLines, vLines, boxes } = state;
-
 
   const top = hLines[r][c];
   const bottom = hLines[r + 1][c];
   const left = vLines[r][c];
   const right = vLines[r][c + 1];
-
 
   if (
     top &&
@@ -126,16 +123,13 @@ function checkBox(state, r, c, player) {
     return true;
   }
 
-
   return false;
 }
-
 
 function applyMove(state, type, r, c, player) {
   if (state.gameOver) {
     return false;
   }
-
 
   // Validate coordinates
   if (type === 'h') {
@@ -148,14 +142,11 @@ function applyMove(state, type, r, c, player) {
       return false;
     }
 
-
     if (state.hLines[r][c]) {
       return false;
     }
 
-
     state.hLines[r][c] = player;
-
 
   } else if (type === 'v') {
     if (
@@ -167,22 +158,17 @@ function applyMove(state, type, r, c, player) {
       return false;
     }
 
-
     if (state.vLines[r][c]) {
       return false;
     }
 
-
     state.vLines[r][c] = player;
-
 
   } else {
     return false;
   }
 
-
   let completed = false;
-
 
   if (type === 'h') {
     // Box above
@@ -191,7 +177,6 @@ function applyMove(state, type, r, c, player) {
         checkBox(state, r - 1, c, player) ||
         completed;
     }
-
 
     // Box below
     if (r < BOXES) {
@@ -207,7 +192,6 @@ function applyMove(state, type, r, c, player) {
         completed;
     }
 
-
     // Box right
     if (c < BOXES) {
       completed =
@@ -216,16 +200,13 @@ function applyMove(state, type, r, c, player) {
     }
   }
 
-
   // Completing a box gives the same player another turn
   if (!completed) {
     state.currentTurn =
       state.currentTurn === 'A' ? 'B' : 'A';
   }
 
-
   const totalBoxes = BOXES * BOXES;
-
 
   if (
     state.scores.A + state.scores.B === totalBoxes
@@ -233,18 +214,14 @@ function applyMove(state, type, r, c, player) {
     state.gameOver = true;
   }
 
-
   return true;
 }
-
 
 function generateRoomCode() {
   const chars =
     'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
-
   let code = '';
-
 
   for (let i = 0; i < 6; i++) {
     code += chars[
@@ -252,10 +229,8 @@ function generateRoomCode() {
     ];
   }
 
-
   return code;
 }
-
 
 function getFullState(state) {
   return {
@@ -270,44 +245,33 @@ function getFullState(state) {
   };
 }
 
-
 io.on('connection', (socket) => {
 
-
   console.log('Player connected:', socket.id);
-
 
   // =========================
   // CREATE ROOM
   // =========================
 
-
   socket.on('createRoom', (payload) => {
     const name = (payload && payload.name) ? String(payload.name).trim() : 'Player A';
     const symbol = getSymbol(name);
 
-
     let code;
-
 
     do {
       code = generateRoomCode();
     } while (rooms.has(code));
 
-
     const state = createEmptyState();
-
 
     state.players.A = socket.id;
     state.playerNames.A = name;
     state.playerSymbols.A = symbol;
 
-
     rooms.set(code, state);
 
-
     socket.join(code);
-
 
     socket.emit('roomCreated', {
       roomId: code,
@@ -316,23 +280,19 @@ io.on('connection', (socket) => {
       symbol
     });
 
-
     console.log(
       `Room ${code} created by ${socket.id} (${name} / ${symbol})`
     );
   });
 
-
   // =========================
   // JOIN ROOM
   // =========================
-
 
   socket.on('joinRoom', (payload) => {
     // Client sends { code, name }
     let code;
     let name;
-
 
     if (typeof payload === 'string') {
       // backwards-compatible if someone sends just the code string
@@ -343,25 +303,20 @@ io.on('connection', (socket) => {
       name = (payload && payload.name) ? String(payload.name).trim() : 'Player B';
     }
 
-
     code = code.toUpperCase().trim();
     const symbol = getSymbol(name);
 
-
     const state = rooms.get(code);
-
 
     if (!state) {
       socket.emit('error', 'Room not found');
       return;
     }
 
-
     if (state.players.B) {
       socket.emit('error', 'Room is full');
       return;
     }
-
 
     // Prevent same socket joining twice
     if (state.players.A === socket.id) {
@@ -369,14 +324,11 @@ io.on('connection', (socket) => {
       return;
     }
 
-
     state.players.B = socket.id;
     state.playerNames.B = name;
     state.playerSymbols.B = symbol;
 
-
     socket.join(code);
-
 
     socket.emit('roomJoined', {
       roomId: code,
@@ -385,21 +337,17 @@ io.on('connection', (socket) => {
       symbol
     });
 
-
     // Start game for both players — include names & symbols
     io.to(code).emit('startGame', getFullState(state));
-
 
     console.log(
       `Player B joined room ${code} (${name} / ${symbol})`
     );
   });
 
-
   // =========================
   // MOVE
   // =========================
-
 
   socket.on('move', ({
     roomId,
@@ -408,15 +356,12 @@ io.on('connection', (socket) => {
     c
   }) => {
 
-
     const state = rooms.get(roomId);
-
 
     if (!state) {
       socket.emit('error', 'Room not found');
       return;
     }
-
 
     const player =
       state.players.A === socket.id
@@ -425,18 +370,15 @@ io.on('connection', (socket) => {
           ? 'B'
           : null;
 
-
     if (!player) {
       socket.emit('error', 'You are not in this room');
       return;
     }
 
-
     if (player !== state.currentTurn) {
       socket.emit('error', 'Not your turn');
       return;
     }
-
 
     const ok = applyMove(
       state,
@@ -446,12 +388,10 @@ io.on('connection', (socket) => {
       player
     );
 
-
     if (!ok) {
       socket.emit('error', 'Invalid move');
       return;
     }
-
 
     io.to(roomId).emit('moveMade', {
       type,
@@ -462,13 +402,11 @@ io.on('connection', (socket) => {
     });
   });
 
-
   // =========================
-  // CHAT
+  // CHAT (text + optional sticker)
   // =========================
 
-
-  socket.on('chat', ({ roomId, text }) => {
+  socket.on('chat', ({ roomId, text, sticker }) => {
     const state = rooms.get(roomId);
     if (!state) return;
 
@@ -482,7 +420,14 @@ io.on('connection', (socket) => {
     if (!player) return;
 
     const cleaned = String(text || '').trim().slice(0, 120);
-    if (!cleaned) return;
+    let stickerId = null;
+
+    if (sticker && ALLOWED_STICKERS.has(String(sticker))) {
+      stickerId = String(sticker);
+    }
+
+    // Must have either text or a valid sticker
+    if (!cleaned && !stickerId) return;
 
     const fromName = state.playerNames[player] || player;
     const fromPlayer = player;
@@ -491,76 +436,60 @@ io.on('connection', (socket) => {
     io.to(roomId).emit('chatMessage', {
       fromName,
       fromPlayer,
-      text: cleaned
+      text: cleaned,
+      sticker: stickerId
     });
   });
-
 
   // =========================
   // NEW GAME
   // =========================
 
-
   socket.on('newGame', (roomId) => {
 
-
     const state = rooms.get(roomId);
-
 
     if (!state) {
       return;
     }
-
 
     // Preserve players, names and symbols
     const players = { ...state.players };
     const playerNames = { ...state.playerNames };
     const playerSymbols = { ...state.playerSymbols };
 
-
     Object.assign(state, createEmptyState());
-
 
     state.players = players;
     state.playerNames = playerNames;
     state.playerSymbols = playerSymbols;
 
-
     io.to(roomId).emit('startGame', getFullState(state));
   });
-
 
   // =========================
   // LEAVE ROOM
   // =========================
 
-
   socket.on('leaveRoom', (roomId) => {
 
-
     const state = rooms.get(roomId);
-
 
     if (!state) {
       return;
     }
 
-
     if (state.players.A === socket.id) {
       state.players.A = null;
     }
-
 
     if (state.players.B === socket.id) {
       state.players.B = null;
     }
 
-
     socket.leave(roomId);
 
-
     io.to(roomId).emit('opponentLeft');
-
 
     if (
       !state.players.A &&
@@ -570,36 +499,28 @@ io.on('connection', (socket) => {
     }
   });
 
-
   // =========================
   // DISCONNECT
   // =========================
 
-
   socket.on('disconnect', () => {
 
-
     for (const [code, state] of rooms) {
-
 
       if (
         state.players.A === socket.id ||
         state.players.B === socket.id
       ) {
 
-
         if (state.players.A === socket.id) {
           state.players.A = null;
         }
-
 
         if (state.players.B === socket.id) {
           state.players.B = null;
         }
 
-
         io.to(code).emit('opponentLeft');
-
 
         if (
           !state.players.A &&
@@ -610,16 +531,13 @@ io.on('connection', (socket) => {
       }
     }
 
-
     console.log('Player disconnected:', socket.id);
   });
 });
 
-
 // =========================
 // HEALTH CHECK
 // =========================
-
 
 app.get('/health', (req, res) => {
   res.json({
@@ -629,14 +547,11 @@ app.get('/health', (req, res) => {
   });
 });
 
-
 // =========================
 // START SERVER
 // =========================
 
-
 const PORT = process.env.PORT || 3001;
-
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(
